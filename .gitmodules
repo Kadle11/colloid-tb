@@ -1,3 +1,6 @@
 [submodule "hemem"]
 	path = hemem
 	url = https://github.com/webglider/hemem.git
+[submodule "apps/gapbs"]
+	path = apps/gapbs
+	url = https://github.com/sbeamer/gapbs.git
