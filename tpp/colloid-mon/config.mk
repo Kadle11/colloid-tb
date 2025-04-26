@@ -5,6 +5,7 @@
 # Currently supported values
 # 	icx-native: Intel Icelake (native)
 # 	clx-native: Intel Cascadelake (native)
+# 	hsw-native: Intel Haswell (native)
 BACKEND ?= icx-native
 
 # Default/alternate tier types

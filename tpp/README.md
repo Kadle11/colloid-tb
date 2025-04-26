@@ -82,6 +82,7 @@ Configure the module by updating `colloid-mon/config.mk`:
 * `BACKEND`: Different backends implement architecture-specific logic for measuring access latency. You need to select the right backend for your server architecture. Currently supported backends:
   * `icx-native`: For Intel Icelake (3rd Gen Xeon)
   * `clx-native`: For Intel Cascadelake (2nd Gen Xeon)
+  * `hsw-native`: For Intel Haswell
 * `DEFAULT_TIER_NUMA`: This should be set to the NUMA node number of the default tier
 * `CORE_MON`: This should be set to the core on which access latency measurement should be performed. IMPORTANT: This should be a dedicated core on the default tier NUMA node.
 
