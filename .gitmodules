@@ -4,3 +4,9 @@
 [submodule "apps/gapbs"]
 	path = apps/gapbs
 	url = https://github.com/sbeamer/gapbs.git
+[submodule "apps/silo"]
+	path = apps/silo
+	url = https://github.com/stephentu/silo.git
+[submodule "apps/CacheLib"]
+	path = apps/CacheLib
+	url = https://github.com/facebook/CacheLib.git

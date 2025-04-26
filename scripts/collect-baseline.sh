@@ -1,10 +1,12 @@
 #!/bin/bash
 
+COLLOID_HOME='/proj/prismgt-PG0/vrao79/colloid-tb'
+mio_path=/proj/prismgt-PG0/vrao79/understanding-the-host-network
+
 config="colloidmt-baseline-gupsrw"
-gups_path=/home/midhul/colloid/apps/gups
-mio_path=/home/midhul/mio-colloid
-record_path=/home/midhul/colloid/colloid-stats
-stats_path=/home/midhul/membw-eval
+gups_path=$COLLOID_HOME/apps/gups
+record_path=$COLLOID_HOME/colloid-stats
+stats_path=$COLLOID_HOME/membw-eval
 
 echo "App Throughput, no background traffic"
 cat $stats_path/$config-iso.gups.txt | tail -n 30 | awk '{sum+=2*$1} END {print (sum/NR)*4096/1e9;}'

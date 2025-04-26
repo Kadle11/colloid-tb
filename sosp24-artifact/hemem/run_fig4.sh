@@ -14,11 +14,11 @@ fi
 # HeMem
 echo "Running HeMem"
 for b in 0 5 10 15; 
-    do MIO_STATS="--stats_colloid_mbm --stats_colloid_wait 90" MMAP_PRE_POPULATE=1 HEMEM_BASELINE="y" $scripts_path/hemem.sh $prefix-gups64-rw-app$i-bg$b $duration $i $b -- $gups_path/gups64-rw $i; 
+    do MIO_STATS="--stats_membw --ant_prestart_duration 90" MMAP_PRE_POPULATE=1 HEMEM_BASELINE="y" $scripts_path/hemem.sh $prefix-gups64-rw-app$i-bg$b $duration $i $b -- $gups_path/gups64-rw $i; 
 done;
 
 # HeMem+colloid
 echo "Running HeMem+colloid"
 for b in 0 5 10 15; 
-    do MIO_STATS="--stats_colloid_mbm --stats_colloid_wait 90" MMAP_PRE_POPULATE=1 $scripts_path/hemem.sh $prefix-colloid-gups64-rw-app$i-bg$b $duration $i $b -- $gups_path/gups64-rw $i; 
+    do MIO_STATS="--stats_membw --ant_prestart_duration 90" MMAP_PRE_POPULATE=1 $scripts_path/hemem.sh $prefix-colloid-gups64-rw-app$i-bg$b $duration $i $b -- $gups_path/gups64-rw $i; 
 done;

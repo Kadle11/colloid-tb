@@ -54,8 +54,8 @@ static void tierinit_exit(void)
     // NOTE: We should not call init_node_memory_type for default dram memtype
     // since it is already called internally in set_node_memory_tier
     // If we do, map_count will be spuriously double incremented
-    //init_node_memory_type(FARMEM_NUMA, colloid_get_default_dram_memtype());
-    //pr_info("init numa node to default dram mem type");
+    // init_node_memory_type(FARMEM_NUMA, colloid_get_default_dram_memtype());
+    // pr_info("init numa node to default dram mem type");
     colloid_init_memory_tier(FARMEM_NUMA);
     pr_info("init numa node to original memory tier");
 

@@ -14,7 +14,6 @@
 #define FARMEM_NUMA 0
 #define LOCAL_NUMA 1
 
-
 static int sizeMiB = 0;
 module_param(sizeMiB, int, 0);
 
@@ -49,8 +48,8 @@ static int memeater_init(void)
 
     // allocate the pages
     for(i = 0; i < num_pages; i++) {
-        // page_list[i] = alloc_pages_exact_nid(LOCAL_NUMA, 4096, GFP_KERNEL);
-        page_list[i] = alloc_pages_node(LOCAL_NUMA, GFP_KERNEL, PGORDER);
+        // page_list[i] = alloc_pages_exact_nid(LOCAL_NUMA, PGSIZE, GFP_KERNEL);
+        page_list[i] = alloc_pages_node(LOCAL_NUMA, GFP_KERNEL | __GFP_THISNODE, PGORDER);
         if(page_list[i] == NULL) {
             pr_info("alloc_pages failed");
             goto err;

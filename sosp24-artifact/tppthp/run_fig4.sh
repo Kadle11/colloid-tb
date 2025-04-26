@@ -13,11 +13,11 @@ fi
 # TPP
 echo "Running TPP w/ THP"
 for b in 0 5 10 15;
-    do MIO_STATS="--stats_colloid_mbm --stats_colloid_wait 570" ENABLE_THP="y" $scripts_path/linux.sh $prefix-gups64-rw-app$i-bg$b $duration $i $b -- $gups_path/gups64-rw $i; 
+    do MIO_STATS="--stats_membw --ant_prestart_duration 570" ENABLE_THP="y" $scripts_path/linux.sh $prefix-gups64-rw-app$i-bg$b $duration $i $b -- $gups_path/gups64-rw $i; 
 done;
 
 # TPP+colloid
 echo "Running TPP w/ THP +colloid"
 for b in 0 5 10 15;
-    do MIO_STATS="--stats_colloid_mbm --stats_colloid_wait 570" ENABLE_THP="y" $scripts_path/linux-colloid.sh $prefix-colloid-gups64-rw-app$i-bg$b $duration $i $b -- $gups_path/gups64-rw $i; 
+    do MIO_STATS="--stats_membw --ant_prestart_duration 570" ENABLE_THP="y" $scripts_path/linux-colloid.sh $prefix-colloid-gups64-rw-app$i-bg$b $duration $i $b -- $gups_path/gups64-rw $i; 
 done;

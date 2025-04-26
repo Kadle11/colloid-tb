@@ -3,19 +3,22 @@
 # Make sure tiering is initialized
 # Make sure to check if THP is enabled or not
 
-config=$1
-# gups_path=/home/midhul/colloid/apps/gups
-mio_path=/home/midhul/mio
-record_path=/home/midhul/colloid/colloid-stats
-stats_path=/home/midhul/membw-eval
-memeater_path=/home/midhul/colloid/tpp/memeater
-kswapdrst_path=/home/midhul/colloid/tpp/kswapdrst
-scripts_path=/home/midhul/colloid/scripts
+# set -x
+# set -e
+
+COLLOID_HOME=/proj/prismgt-PG0/vrao79/colloid-tb
+mio_path=/proj/prismgt-PG0/vrao79/understanding-the-host-network
+
+record_path=$COLLOID_HOME/colloid-stats
+stats_path=$COLLOID_HOME/membw-eval
+memeater_path=$COLLOID_HOME/tpp/memeater
+kswapdrst_path=$COLLOID_HOME/tpp/kswapdrst
+scripts_path=$COLLOID_HOME/scripts
+
 local_numa=1
 local_size=32768
-# gups_workload=$2
-# gups_cores=4
-# stream_num_cores=3
+
+config=$1
 duration=$2
 app_cores=$3
 bg_cores=$4
@@ -27,9 +30,9 @@ else
 	echo "DRAM size set: $local_size MB";
 fi
 
-all_core_list="1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51,53,55,57,59"
+all_core_list="1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51,53,55,57,59,61,63,65,67,69,71"
 bg_core_list=$(echo "$all_core_list" | cut -d ',' -f $((app_cores + 1))-)
-# echo $bg_core_list
+echo $bg_core_list
 
 index=0
 for arg in "$@"; do
@@ -37,7 +40,7 @@ for arg in "$@"; do
     if [ "$arg" == "--" ]; then
         break
     fi
-done
+done || true
 
 # Extract all arguments after "--"
 shift $index
@@ -64,8 +67,8 @@ trap cleanup EXIT
 
 cleanup;
 
-sync;
-echo 3 > /proc/sys/vm/drop_caches
+sudo sync;
+echo 3 | sudo tee /proc/sys/vm/drop_caches
 
 if [ -n "${ENABLE_THP}" ]; then
     echo "Enabling THP";
@@ -73,12 +76,12 @@ if [ -n "${ENABLE_THP}" ]; then
 fi
 
 # Run kswapd reset module
-insmod $kswapdrst_path/kswapdrst.ko
+sudo insmod $kswapdrst_path/kswapdrst.ko
 
 # Make sure swap is disabled
 swapoff -a
-echo 1 > /sys/kernel/mm/numa/demotion_enabled
-echo 2 > /proc/sys/kernel/numa_balancing
+echo 1 | sudo tee /sys/kernel/mm/numa/demotion_enabled
+echo 2 | sudo tee /proc/sys/kernel/numa_balancing
 
 mio_opts=( $MIO_STATS )
 
@@ -99,9 +102,9 @@ fi
 # Set local memory capacity
 if [ -n "${ENABLE_THP}" ]; then
     echo "memeater THP"; 
-    insmod $memeater_path/memeater.ko sizeMiB=$(numastat -m | grep MemFree | awk -v nidx=$local_numa -v sz=$local_size '{print int($(2+nidx)-sz)}') PGSIZE=2097152 PGORDER=9;
+    sudo insmod $memeater_path/memeater.ko sizeMiB=$(numastat -m | grep MemFree | awk -v nidx=$local_numa -v sz=$local_size '{print int($(2+nidx)-sz)}') PGSIZE=2097152 PGORDER=9;
 else
-    insmod $memeater_path/memeater.ko sizeMiB=$(numastat -m | grep MemFree | awk -v nidx=$local_numa -v sz=$local_size '{print int($(2+nidx)-sz)}');
+    sudo insmod $memeater_path/memeater.ko sizeMiB=$(numastat -m | grep MemFree | awk -v nidx=$local_numa -v sz=$local_size '{print int($(2+nidx)-sz)}');
 fi 
 
 echo "Local mem size"

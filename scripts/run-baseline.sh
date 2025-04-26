@@ -1,10 +1,16 @@
 #!/bin/bash
 
+set -x
+
+COLLOID_HOME='/proj/prismgt-PG0/vrao79/colloid-tb'
+mio_path=/proj/prismgt-PG0/vrao79/understanding-the-host-network
+
 config="colloidmt-baseline-gupsrw"
-gups_path=/home/midhul/colloid/apps/gups
-mio_path=/home/midhul/mio-colloid
-record_path=/home/midhul/colloid/colloid-stats
-stats_path=/home/midhul/membw-eval
+gups_path=$COLLOID_HOME/apps/gups
+record_path=$COLLOID_HOME/colloid-stats
+stats_path=$COLLOID_HOME/membw-eval
+
+config="colloidmt-baseline-gupsrw"
 gups_workload="gups-rw"
 gups_cores=4
 stream_num_cores=4
@@ -42,7 +48,7 @@ done;
 
 # Run GUPS with background traffic
 echo "Running $config-bg"
-PYTHONPATH=$PYTHONPATH:$mio_path python3 -m mio $config-bg --ant_cpus $stream_core_list --ant_num_cores $stream_num_cores --ant_mem_numa 3 --ant stream --ant_writefrac 50 --ant_inst_size 64 --ant_duration 10000 &
+PYTHONPATH=$PYTHONPATH:$mio_path python3 -m mio $config-bg --ant_cpus $stream_core_list --ant_num_cores $stream_num_cores --ant_mem_numa 1 --ant stream --ant_writefrac 50 --ant_inst_size 64 --ant_duration 10000 &
 pid_mio=$!;
 sleep 10;
 $gups_path/$gups_workload $gups_cores > $stats_path/$config-bg.gups.txt 2>&1 &
