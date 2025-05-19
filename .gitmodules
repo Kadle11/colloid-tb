@@ -10,3 +10,6 @@
 [submodule "apps/CacheLib"]
 	path = apps/CacheLib
 	url = https://github.com/facebook/CacheLib.git
+[submodule "apps/memory_microbenchmarks/extern/spdlog"]
+	path = apps/memory_microbenchmarks/extern/spdlog
+	url = https://github.com/gabime/spdlog.git
