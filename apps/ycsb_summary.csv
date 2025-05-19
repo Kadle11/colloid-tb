@@ -1,0 +1,26 @@
+Filename,Throughput(ops/sec),AverageLatency(us),MinLatency(us),MaxLatency(us),50thPercentileLatency(us),95thPercentileLatency(us),99thPercentileLatency(us)
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-20GB-app16-bg0-llc0.app.txt, 76870.09568789511, 197.26360434691406, 16, 47871, 195, 263, 302
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-20GB-app16-bg0-llc1.app.txt, 77984.8709350386, 194.80676492189957, 16, 35743, 193, 252, 284
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-20GB-app16-bg0-llc2.app.txt, 77681.0045086055, 194.15744211152432, 15, 32655, 193, 251, 283
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-20GB-app16-bg16-llc0.app.txt, 32941.46170489194, 484.32104219449684, 40, 60191, 457, 704, 863
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-20GB-app16-bg16-llc1.app.txt, 32522.22894348287, 491.065725122647, 39, 31231, 462, 711, 853
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-20GB-app16-bg16-llc2.app.txt, 32929.35599399896, 484.4795274119249, 41, 140543, 455, 700, 829
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-20GB-app16-bg8-llc0.app.txt, 62711.49451525269, 253.0397743422509, 25, 42687, 246, 334, 375
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-20GB-app16-bg8-llc1.app.txt, 62995.935502241395, 252.04636027708193, 26, 34527, 246, 332, 371
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-20GB-app16-bg8-llc2.app.txt, 62400.31549599515, 254.10201329918297, 22, 124863, 249, 336, 375
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-60GB-app16-bg0-llc0.app.txt, 77915.60182010845, 194.63457531337593, 16, 56383, 194, 250, 282
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-60GB-app16-bg0-llc1.app.txt, 77072.71656662627, 196.9727691628334, 16, 38655, 196, 253, 284
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-60GB-app16-bg0-llc2.app.txt, 77478.29832863815, 196.59369077886572, 16, 46911, 195, 251, 283
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-60GB-app16-bg16-llc0.app.txt, 33043.56331212818, 482.8064989076377, 38, 66431, 453, 704, 843
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-60GB-app16-bg16-llc1.app.txt, 32531.370000091087, 489.7612887972171, 39, 97087, 460, 725, 871
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-60GB-app16-bg16-llc2.app.txt, 33067.55834439994, 482.73495600385456, 40, 56383, 453, 708, 858
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-60GB-app16-bg8-llc0.app.txt, 62307.15934183702, 254.1603272594351, 25, 43711, 248, 333, 373
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-60GB-app16-bg8-llc1.app.txt, 62533.29898170776, 253.57340490410448, 24, 31183, 247, 333, 372
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-60GB-app16-bg8-llc2.app.txt, 62604.23605302829, 253.4371425098796, 23, 37503, 247, 333, 372
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-8GB-app16-bg0-llc0.app.txt, 78315.15899543579, 193.73007844861277, 16, 76799, 193, 251, 286
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-8GB-app16-bg0-llc1.app.txt, 78960.99958308593, 192.02150260095144, 15, 44319, 191, 248, 281
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-8GB-app16-bg0-llc2.app.txt, 78225.47083910898, 193.93530355916087, 15, 65375, 192, 257, 296
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-8GB-app16-bg16-llc0.app.txt,,,,,,,
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-8GB-app16-bg8-llc0.app.txt, 60914.695061036524, 261.10284406652625, 25, 42879, 256, 346, 388
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-8GB-app16-bg8-llc1.app.txt, 60343.47506004176, 263.2781995806504, 26, 64159, 258, 349, 391
+/proj/prismgt-PG0/vrao79/colloid-tb/sensitivity_sweep/redis-8GB-app16-bg8-llc2.app.txt, 60613.99552911169, 262.27517415956953, 24, 46399, 257, 347, 388

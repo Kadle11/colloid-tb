@@ -343,8 +343,6 @@ void *thread_function(void *arg) {
             _mm512_store_si512(chunk, _mm512_add_epi32(mm_a, val));
             count++;
         }
-        #else
-            #error "Define WORKLOAD"
         #endif
 
         

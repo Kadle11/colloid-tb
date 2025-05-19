@@ -30,8 +30,10 @@ else
 	echo "DRAM size set: $local_size MB";
 fi
 
-all_core_list="1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51,53,55,57,59,61,63,65,67,69,71"
-bg_core_list=$(echo "$all_core_list" | cut -d ',' -f $((app_cores + 1))-)
+icx_all_core_list="1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51,53,55,57,59,61,63,65,67,69,71"
+hsw_all_core_list="1,3,5,7,9,11,13,15,17,19,21,23,25,27"
+
+bg_core_list=$(echo "$hsw_all_core_list" | cut -d ',' -f $((app_cores + 1))-)
 echo $bg_core_list
 
 index=0

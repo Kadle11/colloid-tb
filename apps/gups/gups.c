@@ -21,12 +21,20 @@
 #define LOCAL_NUMA 1
 #define REMOTE_NUMA 0
 
+#define HOTNESS 99
+
+// 100GB/25GB
 // #define WSS 103079215104ULL
-#define WSS 77309411328ULL
-//#define HOTSS 25769803776ULL
-#define HOTSS 21474836480ULL
+// #define HOTSS 25769803776ULL
+
+// 20GB/10GB
 // #define WSS 2147483648ULL
 // #define HOTSS 1073741824ULL
+
+// 75GB/20GB
+#define WSS 77309411328ULL
+#define HOTSS 21474836480ULL
+
 // #define CHUNK_SIZE 4096
 // #define CL_PER_CHUNK 64
 
@@ -131,7 +139,6 @@ void *thread_function(void *arg) {
 
     // Prevent compiler reordering
     
-
     // Perform manual placement if needed
     // if(args->manual_placement) {
     //     size_t pg_count = (args->buf_size)/4096ULL;
@@ -201,7 +208,7 @@ void *thread_function(void *arg) {
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
-            if(x%100 < 90) {
+            if(x%100 < HOTNESS) {
                 // access hot region
                 start = a + (args->buf_size - args->hot_size);
                 slots = args->hot_size / CHUNK_SIZE;

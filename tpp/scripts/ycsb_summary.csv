@@ -1,0 +1,15 @@
+Filename,Throughput(ops/sec),AverageLatency(us),MinLatency(us),MaxLatency(us),50thPercentileLatency(us),95thPercentileLatency(us),99thPercentileLatency(us)
+/proj/prismgt-PG0/vrao79/colloid-tb/ycsb-eval/tpp-workloadk-app16-bg0.app.txt, 47521.470200236465, 19.85091938510787, 12, 33535, 19, 25, 34
+/proj/prismgt-PG0/vrao79/colloid-tb/ycsb-eval/tpp-workloadk-app16-bg5.app.txt, 41521.47989197772, 22.832651866207787, 15, 29711, 22, 32, 39
+/proj/prismgt-PG0/vrao79/colloid-tb/ycsb-eval/tpp-workloadk-app16-bg10.app.txt, 35756.88749166865, 26.48982803722106, 15, 37951, 25, 37, 45
+/proj/prismgt-PG0/vrao79/colloid-tb/ycsb-eval/tpp-workloadk-app16-bg15.app.txt, 30848.50668548837, 30.95389659696236, 16, 50207, 29, 42, 50
+
+/proj/prismgt-PG0/vrao79/colloid-tb/ycsb-eval/tpp-workloadk-reducedl3-app16-bg0.app.txt, 22216.890168581762, 45.652522668794, 28, 13375, 45, 50, 54
+/proj/prismgt-PG0/vrao79/colloid-tb/ycsb-eval/tpp-workloadk-reducedl3-app16-bg5.app.txt, 20440.233574637103, 49.8357516828721, 30, 14887, 49, 57, 60
+/proj/prismgt-PG0/vrao79/colloid-tb/ycsb-eval/tpp-workloadk-reducedl3-app16-bg15.app.txt, 20929.01380812615, 49.433034315625996, 31, 44383, 49, 58, 63
+/proj/prismgt-PG0/vrao79/colloid-tb/ycsb-eval/tpp-workloadk-reducedl3-app16-bg10.app.txt, 21001.202948904913, 48.79578236787928, 24, 28191, 48, 56, 61
+
+/proj/prismgt-PG0/vrao79/colloid-tb/ycsb-eval/tpp-workloadu-app16-bg0.app.txt, 44340.07775476035, 20.445569239252954, 15, 15279, 20, 27, 35
+/proj/prismgt-PG0/vrao79/colloid-tb/ycsb-eval/tpp-workloadu-app16-bg5.app.txt, 38608.01131678028, 23.594165425407937, 15, 29407, 22, 32, 41
+/proj/prismgt-PG0/vrao79/colloid-tb/ycsb-eval/tpp-workloadu-app16-bg10.app.txt, 33392.81707147666, 27.258833171544406, 14, 38207, 25, 39, 47
+/proj/prismgt-PG0/vrao79/colloid-tb/ycsb-eval/tpp-workloadu-app16-bg15.app.txt, 27503.35540935994, 33.184371936094124, 16, 42975, 31, 46, 53
