@@ -7,12 +7,13 @@
 # set -e
 
 
-ARCH=icx
+ARCH=hsw
+
 COLLOID_HOME=/proj/prismgt-PG0/vrao79/colloid-tb
 mio_path=/proj/prismgt-PG0/vrao79/understanding-the-host-network
 
 record_path=$COLLOID_HOME/colloid-stats
-stats_path=$COLLOID_HOME/sensitivity_sweep
+stats_path=$COLLOID_HOME/mb_sweep_stats
 memeater_path=$COLLOID_HOME/tpp/memeater
 kswapdrst_path=$COLLOID_HOME/tpp/kswapdrst
 scripts_path=$COLLOID_HOME/scripts

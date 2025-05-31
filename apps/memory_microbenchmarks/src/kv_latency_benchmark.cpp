@@ -138,10 +138,10 @@ void thread_worker(std::atomic<uint64_t> &completed_ops, std::atomic<uint64_t> &
         return;
     }
 
-
     while (std::chrono::high_resolution_clock::now() < end_time)
     {
         auto access_start = __rdtsc();
+        uint64_t index = (dist_type == "zipf") ? zipf_gen.next() : uniform_dist(rng);
         KeyType key = kv_store[index].key;
         ValueType value = kv_store[index].value;
         auto access_end = __rdtsc();
@@ -199,7 +199,6 @@ void nt_thread_worker(std::atomic<uint64_t> &completed_ops, std::atomic<uint64_t
     uint64_t local_ops = 0;
     while (std::chrono::high_resolution_clock::now() < end_time)
     {
-
         uint64_t index = (dist_type == "zipf") ? zipf_gen.next() : uniform_dist(rng);
         __m128i *ptr = reinterpret_cast<__m128i *>(&kv_store[index]);
 

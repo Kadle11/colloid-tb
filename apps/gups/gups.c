@@ -198,8 +198,8 @@ void *thread_function(void *arg) {
 
     uint64_t x = 432437644 + args->thread_id;
     uint64_t count = 0, prev_count = 0;
-    __m512i sum = _mm512_set_epi32(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    __m512i val = _mm512_set_epi32(1995, 1995, 2002, 2002, 1995, 1995, 2002, 2002, 1995, 1995, 2002, 2002, 1995, 1995, 2002, 2002);
+    __m256i sum = _mm256_set_epi32(0, 0, 0, 0, 0, 0, 0, 0);
+    __m256i val = _mm256_set_epi32(1995, 1995, 2002, 2002, 1995, 1995, 2002, 2002);
     int i;
     while(count < 999999999999999ULL) {
         for(i = 0; i < 1024; i++) {
@@ -227,36 +227,36 @@ void *thread_function(void *arg) {
             int k;
             #if defined(WORKLOAD_READWRITE)
             for(k = 0; k < CL_PER_CHUNK; k++) {
-                __m512i mm_a = _mm512_load_si512(&chunk[64*k]);
-                _mm512_store_si512(&chunk[64*k], _mm512_add_epi32(mm_a, val)); 
+                __m256i mm_a = _mm256_load_si256(&chunk[64*k]);
+                _mm256_store_si256(&chunk[64*k], _mm256_add_epi32(mm_a, val)); 
             }
             #elif defined(WORKLOAD_READ)
             for(k = 0; k < CL_PER_CHUNK; k++) {
-                __m512i mm_a = _mm512_load_si512(&chunk[64*k]);
-                sum = _mm512_add_epi32(sum, mm_a);
+                __m256i mm_a = _mm256_load_si256(&chunk[64*k]);
+                sum = _mm256_add_epi32(sum, mm_a);
             }
             #elif defined(WORKLOAD_2TO1)
             if(count%2 == 0) {
                 for(k = 0; k < CL_PER_CHUNK; k++) {
-                    __m512i mm_a = _mm512_load_si512(&chunk[64*k]);
-                    sum = _mm512_add_epi32(sum, mm_a);
+                    __m256i mm_a = _mm256_load_si256(&chunk[64*k]);
+                    sum = _mm256_add_epi32(sum, mm_a);
                 }
             } else {
                 for(k = 0; k < CL_PER_CHUNK; k++) {
-                    __m512i mm_a = _mm512_load_si512(&chunk[64*k]);
-                    _mm512_store_si512(&chunk[64*k], _mm512_add_epi32(mm_a, val)); 
+                    __m256i mm_a = _mm256_load_si256(&chunk[64*k]);
+                    _mm256_store_si256(&chunk[64*k], _mm256_add_epi32(mm_a, val)); 
                 }
             }
             #elif defined(WORKLOAD_3TO1)
             if(count%3 < 2) {
                 for(k = 0; k < CL_PER_CHUNK; k++) {
-                    __m512i mm_a = _mm512_load_si512(&chunk[64*k]);
-                    sum = _mm512_add_epi32(sum, mm_a);
+                    __m256i mm_a = _mm256_load_si256(&chunk[64*k]);
+                    sum = _mm256_add_epi32(sum, mm_a);
                 }
             } else {
                 for(k = 0; k < CL_PER_CHUNK; k++) {
-                    __m512i mm_a = _mm512_load_si512(&chunk[64*k]);
-                    _mm512_store_si512(&chunk[64*k], _mm512_add_epi32(mm_a, val)); 
+                    __m256i mm_a = _mm256_load_si256(&chunk[64*k]);
+                    _mm256_store_si256(&chunk[64*k], _mm256_add_epi32(mm_a, val)); 
                 }
             }
             #else
@@ -290,25 +290,13 @@ void *thread_function(void *arg) {
         uint64_t read_checksum;
         int chx0, chx1, chx2, chx3;
         __m128i chx;
-        chx = _mm512_extracti32x4_epi32(sum, 0);
+        chx = _mm256_extracti128_si256(sum, 0);
         chx0 = _mm_extract_epi32(chx, 0);
         chx1 = _mm_extract_epi32(chx, 1);
         chx2 = _mm_extract_epi32(chx, 2);
         chx3 = _mm_extract_epi32(chx, 3);
         read_checksum += chx0 + chx1 + chx2 + chx3;
-        chx = _mm512_extracti32x4_epi32(sum, 1);
-        chx0 = _mm_extract_epi32(chx, 0);
-        chx1 = _mm_extract_epi32(chx, 1);
-        chx2 = _mm_extract_epi32(chx, 2);
-        chx3 = _mm_extract_epi32(chx, 3);
-        read_checksum += chx0 + chx1 + chx2 + chx3;
-        chx = _mm512_extracti32x4_epi32(sum, 2);
-        chx0 = _mm_extract_epi32(chx, 0);
-        chx1 = _mm_extract_epi32(chx, 1);
-        chx2 = _mm_extract_epi32(chx, 2);
-        chx3 = _mm_extract_epi32(chx, 3);
-        read_checksum += chx0 + chx1 + chx2 + chx3;
-        chx = _mm512_extracti32x4_epi32(sum, 3);
+        chx = _mm256_extracti128_si256(sum, 1);
         chx0 = _mm_extract_epi32(chx, 0);
         chx1 = _mm_extract_epi32(chx, 1);
         chx2 = _mm_extract_epi32(chx, 2);

@@ -6,7 +6,7 @@
 # set -x
 # set -e
 
-ARCH=icx
+ARCH=hsw
 COLLOID_HOME=/proj/prismgt-PG0/vrao79/colloid-tb
 mio_path=/proj/prismgt-PG0/vrao79/understanding-the-host-network
 

@@ -139,8 +139,8 @@ void *thread_function(void *arg) {
     // uint64_t x = 432437644 + args->thread_id;
     uint64_t idx = 0;
     uint64_t count = 0, prev_count = 0;
-    __m512i sum = _mm512_set_epi32(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    __m512i val = _mm512_set_epi32(1995, 1995, 2002, 2002, 1995, 1995, 2002, 2002, 1995, 1995, 2002, 2002, 1995, 1995, 2002, 2002);
+    __m256i sum = _mm512_set_epi32(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    __m256i val = _mm512_set_epi32(1995, 1995, 2002, 2002, 1995, 1995, 2002, 2002, 1995, 1995, 2002, 2002, 1995, 1995, 2002, 2002);
     int i;
     while(count < 999999999999999ULL) {
         for(i = 0; i < STATS_ITERATIONS; i++) {
@@ -154,10 +154,10 @@ void *thread_function(void *arg) {
             int k;
             for(k = 0; k < (CHUNK_SIZE/64); k++) {
                 #if defined(WORKLOAD_READWRITE)
-                __m512i mm_a = _mm512_load_si512(&chunk[64*k]);
+                __m256i mm_a = _mm512_load_si512(&chunk[64*k]);
                 _mm512_store_si512(&chunk[64*k], _mm512_add_epi32(mm_a, val));
                 #elif defined(WORKLOAD_READ)
-                __m512i mm_a = _mm512_load_si512(&chunk[64*k]);
+                __m256i mm_a = _mm512_load_si512(&chunk[64*k]);
                 sum = _mm512_add_epi32(sum, mm_a);
                 #else
                 #error "Define WORKLOAD"

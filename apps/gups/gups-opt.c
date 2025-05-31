@@ -236,13 +236,14 @@ void *thread_function(void *arg) {
 
     uint64_t x = 432437644 + args->thread_id;
     uint64_t count = 0, prev_count = 0;
-    __m512i sum = _mm512_set_epi32(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    __m512i val = _mm512_set_epi32(1995, 1995, 2002, 2002, 1995, 1995, 2002, 2002, 1995, 1995, 2002, 2002, 1995, 1995, 2002, 2002);
+    __m256i sum = _mm256_set_epi32(0, 0, 0, 0, 0, 0, 0, 0);
+    __m256i val = _mm256_set_epi32(1995, 1995, 2002, 2002, 1995, 1995, 2002, 2002);
+
     int i;
     char *hot_start = a + (args->buf_size - args->hot_size);
     // char *cold_start = a;
-    size_t hot_slots = args->hot_size / 64;
-    size_t cold_slots = (args->buf_size)/64;
+    size_t hot_slots = args->hot_size / 32;
+    size_t cold_slots = (args->buf_size)/32;
     char *start;
     size_t slots;
     char *chunk;
@@ -257,9 +258,9 @@ void *thread_function(void *arg) {
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
-            chunk = start + 64*(x%slots);
-            __m512i mm_a = _mm512_load_si512(chunk);
-            _mm512_store_si512(chunk, _mm512_add_epi32(mm_a, val));
+            chunk = start + 32*(x%slots);
+            __m256i mm_a = _mm256_load_si256((__m256i*)chunk);
+            _mm256_store_si256((__m256i*)chunk, _mm256_add_epi32(mm_a, val));
             count++;
         }
         #elif defined(WORKLOAD_READ)
@@ -272,9 +273,9 @@ void *thread_function(void *arg) {
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
-            chunk = start + 64*(x%slots);
-            __m512i mm_a = _mm512_load_si512(chunk);
-            sum = _mm512_add_epi32(sum, mm_a);
+            chunk = start + 32*(x%slots);
+            __m256i mm_a = _mm256_load_si256((__m256i*)chunk);
+            sum = _mm256_add_epi32(sum, mm_a);
             count++;
         }
         #elif defined(WORKLOAD_2TO1)
@@ -287,9 +288,9 @@ void *thread_function(void *arg) {
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
-            chunk = start + 64*(x%slots);
-            __m512i mm_a = _mm512_load_si512(chunk);
-            sum = _mm512_add_epi32(sum, mm_a);
+            chunk = start + 32*(x%slots);
+            __m256i mm_a = _mm256_load_si256((__m256i*)chunk);
+            sum = _mm256_add_epi32(sum, mm_a);
             count++;
             x ^= x << 13;
             x ^= x >> 7;
@@ -299,9 +300,9 @@ void *thread_function(void *arg) {
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
-            chunk = start + 64*(x%slots);
-            mm_a = _mm512_load_si512(chunk);
-            _mm512_store_si512(chunk, _mm512_add_epi32(mm_a, val));
+            chunk = start + 32*(x%slots);
+            mm_a = _mm256_load_si256((__m256i*)chunk);
+            _mm256_store_si256((__m256i*)chunk, _mm256_add_epi32(mm_a, val));
             count++;
         }
         #elif defined(WORKLOAD_3TO1)
@@ -314,9 +315,9 @@ void *thread_function(void *arg) {
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
-            chunk = start + 64*(x%slots);
-            __m512i mm_a = _mm512_load_si512(chunk);
-            sum = _mm512_add_epi32(sum, mm_a);
+            chunk = start + 32*(x%slots);
+            __m256i mm_a = _mm256_load_si256((__m256i*)chunk);
+            sum = _mm256_add_epi32(sum, mm_a);
             count++;
             x ^= x << 13;
             x ^= x >> 7;
@@ -326,9 +327,9 @@ void *thread_function(void *arg) {
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
-            chunk = start + 64*(x%slots);
-            mm_a = _mm512_load_si512(chunk);
-            sum = _mm512_add_epi32(sum, mm_a);
+            chunk = start + 32*(x%slots);
+            mm_a = _mm256_load_si256((__m256i*)chunk);
+            sum = _mm256_add_epi32(sum, mm_a);
             count++;
             x ^= x << 13;
             x ^= x >> 7;
@@ -338,9 +339,9 @@ void *thread_function(void *arg) {
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
-            chunk = start + 64*(x%slots);
-            mm_a = _mm512_load_si512(chunk);
-            _mm512_store_si512(chunk, _mm512_add_epi32(mm_a, val));
+            chunk = start + 32*(x%slots);
+            mm_a = _mm256_load_si256((__m256i*)chunk);
+            _mm256_store_si256((__m256i*)chunk, _mm256_add_epi32(mm_a, val));
             count++;
         }
         #endif
@@ -374,28 +375,16 @@ void *thread_function(void *arg) {
     }
 
 
-        uint64_t read_checksum;
+        uint64_t read_checksum = 0;
         int chx0, chx1, chx2, chx3;
         __m128i chx;
-        chx = _mm512_extracti32x4_epi32(sum, 0);
+        chx = _mm256_extracti128_si256(sum, 0);
         chx0 = _mm_extract_epi32(chx, 0);
         chx1 = _mm_extract_epi32(chx, 1);
         chx2 = _mm_extract_epi32(chx, 2);
         chx3 = _mm_extract_epi32(chx, 3);
         read_checksum += chx0 + chx1 + chx2 + chx3;
-        chx = _mm512_extracti32x4_epi32(sum, 1);
-        chx0 = _mm_extract_epi32(chx, 0);
-        chx1 = _mm_extract_epi32(chx, 1);
-        chx2 = _mm_extract_epi32(chx, 2);
-        chx3 = _mm_extract_epi32(chx, 3);
-        read_checksum += chx0 + chx1 + chx2 + chx3;
-        chx = _mm512_extracti32x4_epi32(sum, 2);
-        chx0 = _mm_extract_epi32(chx, 0);
-        chx1 = _mm_extract_epi32(chx, 1);
-        chx2 = _mm_extract_epi32(chx, 2);
-        chx3 = _mm_extract_epi32(chx, 3);
-        read_checksum += chx0 + chx1 + chx2 + chx3;
-        chx = _mm512_extracti32x4_epi32(sum, 3);
+        chx = _mm256_extracti128_si256(sum, 1);
         chx0 = _mm_extract_epi32(chx, 0);
         chx1 = _mm_extract_epi32(chx, 1);
         chx2 = _mm_extract_epi32(chx, 2);
@@ -419,7 +408,7 @@ int main(int argc, char *argv[]) {
         pg_size = 2ULL*1024ULL*1024ULL;
     }
     setbuf(stdout, NULL);
-    int cores[32] = {1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51,53,55,57,59,61,63};
+    int cores[14] = {1,3,5,7,9,11,13,15,17,19,21,23,25,27};
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <num_threads> [manual] [fraction of hotset in local] [distribute/localize] [reset]\n", argv[0]);
         return 1;

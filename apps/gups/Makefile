@@ -1,6 +1,6 @@
 CC = gcc
-CFLAGS = -O3 -msse4 -g -march=native -funroll-loops
-CFLAGSOPT = -O3 -msse4 -g -march=native
+CFLAGS = -O3 -g -march=native -funroll-loops
+CFLAGSOPT = -O3 -g -march=native
 
 all: gups-r gups-rw gups-2to1 gups-3to1 gups64-rw gups64-cfrw gups64-r gups64-2to1 gups64-3to1 gups256-rw gups1024-rw
 
