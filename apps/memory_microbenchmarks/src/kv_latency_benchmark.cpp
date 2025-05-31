@@ -138,10 +138,9 @@ void thread_worker(std::atomic<uint64_t> &completed_ops, std::atomic<uint64_t> &
         return;
     }
 
+
     while (std::chrono::high_resolution_clock::now() < end_time)
     {
-        uint64_t index = (dist_type == "zipf") ? zipf_gen.next() : uniform_dist(rng);
-
         auto access_start = __rdtsc();
         KeyType key = kv_store[index].key;
         ValueType value = kv_store[index].value;

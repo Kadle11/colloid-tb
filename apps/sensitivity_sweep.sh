@@ -30,8 +30,8 @@ workload_cmd=$5
 workload_init_cmd=$6
 
 # Sweep Params
-llc_sweep=(0 1 2)
-cross_numa_interference_sweep=(0 8 16)
+llc_sweep=(0 3)
+cross_numa_interference_sweep=(0 16)
 
 # Validate input (At least 5 arguments)
 if [ $# -lt 5 ]; then
@@ -171,9 +171,14 @@ for bg_cores in "${cross_numa_interference_sweep[@]}"; do
 
         # Run YCSB
         echo "Running $config"
-        numactl -C $app_cores --membind=$local_numa $workload_cmd > $stats_path/$config.app.txt 2> $stats_path/$config.stderr.txt &
+        numactl -C $app_core_list --membind=$local_numa $workload_cmd > $stats_path/$config.app.txt 2> $stats_path/$config.stderr.txt &
         pid_app=$!;
         all_pids+=($pid_app);
+
+        # Record LLC Misses and LLC Loads
+        perf stat -e LLC-loads,LLC-misses -p $pid_app --log-fd 1 > $stats_path/$config.llc_stats.txt &
+        pid_perf=$!;
+        all_pids+=($pid_perf);
 
         # Record vm stats for duration
         rm -f $stats_path/$config.vmstat.txt
@@ -226,6 +231,11 @@ for bg_cores in "${cross_numa_interference_sweep[@]}"; do
 
         $scripts_path/disable_thp.sh;
         echo "Done";
+
+        kill $pid_perf > /dev/null 2>&1;
+        while is_process_alive $pid_perf; do
+            sleep 1;
+        done;
 
     done
 done
