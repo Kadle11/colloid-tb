@@ -13,3 +13,6 @@
 [submodule "apps/memory_microbenchmarks/extern/spdlog"]
 	path = apps/memory_microbenchmarks/extern/spdlog
 	url = https://github.com/gabime/spdlog.git
+[submodule "apps/MemoryBenchmark"]
+	path = apps/MemoryBenchmark
+	url = https://github.com/Kadle11/MemoryBenchmark
