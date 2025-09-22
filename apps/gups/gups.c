@@ -18,8 +18,8 @@
 #define LOG_INTERVAL_MS 1000
 #define MAX_THREADS 32
 
-#define LOCAL_NUMA 1
-#define REMOTE_NUMA 0
+#define LOCAL_NUMA 0
+#define REMOTE_NUMA 1
 
 #define HOTNESS 99
 
@@ -40,6 +40,27 @@
 
 // int TSC_ratio;
 // uint64_t begin_ts;
+
+#if defined(__AVX512F__)
+// --- AVX-512 backend ---
+#define VEC_TYPE       __m512i
+#define VEC_LOAD(p)    _mm512_load_si512((__m512i const*)(p))
+#define VEC_STORE(p,v) _mm512_store_si512((__m512i*)(p), (v))
+#define VEC_ADD(a,b)   _mm512_add_epi32((a),(b))
+#define VEC_SET1(x)    _mm512_set1_epi32(x)
+#define VEC_EXTRACT_128(v, idx) _mm512_extracti32x4_epi32((v), (idx))
+#else
+// --- AVX2 fallback ---
+#define VEC_TYPE       __m256i
+#define VEC_LOAD(p)    _mm256_load_si256((__m256i const*)(p))
+#define VEC_STORE(p,v) _mm256_store_si256((__m256i*)(p), (v))
+#define VEC_ADD(a,b)   _mm256_add_epi32((a),(b))
+#define VEC_SET1(x)    _mm256_set1_epi32(x)
+#define VEC_EXTRACT_128(v, idx) \
+    ((idx) == 0 ? _mm256_castsi256_si128(v) : _mm256_extracti128_si256(v, 1))
+
+#endif
+
 
 size_t pg_size;
 
@@ -198,8 +219,8 @@ void *thread_function(void *arg) {
 
     uint64_t x = 432437644 + args->thread_id;
     uint64_t count = 0, prev_count = 0;
-    __m512i sum = _mm512_set_epi32(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    __m512i val = _mm512_set_epi32(1995, 1995, 2002, 2002, 1995, 1995, 2002, 2002, 1995, 1995, 2002, 2002, 1995, 1995, 2002, 2002);
+    VEC_TYPE sum = VEC_SET1(0);
+    VEC_TYPE val = VEC_SET1(1995);
     int i;
     while(count < 999999999999999ULL) {
         for(i = 0; i < 1024; i++) {
@@ -226,39 +247,39 @@ void *thread_function(void *arg) {
             // printf("chunk: %p\n", chunk);
             int k;
             #if defined(WORKLOAD_READWRITE)
-            for(k = 0; k < CL_PER_CHUNK; k++) {
-                __m512i mm_a = _mm512_load_si512(&chunk[64*k]);
-                _mm512_store_si512(&chunk[64*k], _mm512_add_epi32(mm_a, val)); 
-            }
+                for (k = 0; k < CL_PER_CHUNK; k++) {
+                    VEC_TYPE mm_a = VEC_LOAD(&chunk[64*k]);
+                    VEC_STORE(&chunk[64*k], VEC_ADD(mm_a, val));
+                }
             #elif defined(WORKLOAD_READ)
-            for(k = 0; k < CL_PER_CHUNK; k++) {
-                __m512i mm_a = _mm512_load_si512(&chunk[64*k]);
-                sum = _mm512_add_epi32(sum, mm_a);
-            }
+                for (k = 0; k < CL_PER_CHUNK; k++) {
+                    VEC_TYPE mm_a = VEC_LOAD(&chunk[64*k]);
+                    sum = VEC_ADD(sum, mm_a);
+                }
             #elif defined(WORKLOAD_2TO1)
-            if(count%2 == 0) {
-                for(k = 0; k < CL_PER_CHUNK; k++) {
-                    __m512i mm_a = _mm512_load_si512(&chunk[64*k]);
-                    sum = _mm512_add_epi32(sum, mm_a);
+                if (count % 2 == 0) {
+                    for (k = 0; k < CL_PER_CHUNK; k++) {
+                        VEC_TYPE mm_a = VEC_LOAD(&chunk[64*k]);
+                        sum = VEC_ADD(sum, mm_a);
+                    }
+                } else {
+                    for (k = 0; k < CL_PER_CHUNK; k++) {
+                        VEC_TYPE mm_a = VEC_LOAD(&chunk[64*k]);
+                        VEC_STORE(&chunk[64*k], VEC_ADD(mm_a, val));
+                    }
                 }
-            } else {
-                for(k = 0; k < CL_PER_CHUNK; k++) {
-                    __m512i mm_a = _mm512_load_si512(&chunk[64*k]);
-                    _mm512_store_si512(&chunk[64*k], _mm512_add_epi32(mm_a, val)); 
-                }
-            }
             #elif defined(WORKLOAD_3TO1)
-            if(count%3 < 2) {
-                for(k = 0; k < CL_PER_CHUNK; k++) {
-                    __m512i mm_a = _mm512_load_si512(&chunk[64*k]);
-                    sum = _mm512_add_epi32(sum, mm_a);
+                if (count % 3 < 2) {
+                    for (k = 0; k < CL_PER_CHUNK; k++) {
+                        VEC_TYPE mm_a = VEC_LOAD(&chunk[64*k]);
+                        sum = VEC_ADD(sum, mm_a);
+                    }
+                } else {
+                    for (k = 0; k < CL_PER_CHUNK; k++) {
+                        VEC_TYPE mm_a = VEC_LOAD(&chunk[64*k]);
+                        VEC_STORE(&chunk[64*k], VEC_ADD(mm_a, val));
+                    }
                 }
-            } else {
-                for(k = 0; k < CL_PER_CHUNK; k++) {
-                    __m512i mm_a = _mm512_load_si512(&chunk[64*k]);
-                    _mm512_store_si512(&chunk[64*k], _mm512_add_epi32(mm_a, val)); 
-                }
-            }
             #else
                 #error "Define WORKLOAD"
             #endif
@@ -289,31 +310,15 @@ void *thread_function(void *arg) {
 
         uint64_t read_checksum;
         int chx0, chx1, chx2, chx3;
-        __m128i chx;
-        chx = _mm512_extracti32x4_epi32(sum, 0);
-        chx0 = _mm_extract_epi32(chx, 0);
-        chx1 = _mm_extract_epi32(chx, 1);
-        chx2 = _mm_extract_epi32(chx, 2);
-        chx3 = _mm_extract_epi32(chx, 3);
-        read_checksum += chx0 + chx1 + chx2 + chx3;
-        chx = _mm512_extracti32x4_epi32(sum, 1);
-        chx0 = _mm_extract_epi32(chx, 0);
-        chx1 = _mm_extract_epi32(chx, 1);
-        chx2 = _mm_extract_epi32(chx, 2);
-        chx3 = _mm_extract_epi32(chx, 3);
-        read_checksum += chx0 + chx1 + chx2 + chx3;
-        chx = _mm512_extracti32x4_epi32(sum, 2);
-        chx0 = _mm_extract_epi32(chx, 0);
-        chx1 = _mm_extract_epi32(chx, 1);
-        chx2 = _mm_extract_epi32(chx, 2);
-        chx3 = _mm_extract_epi32(chx, 3);
-        read_checksum += chx0 + chx1 + chx2 + chx3;
-        chx = _mm512_extracti32x4_epi32(sum, 3);
-        chx0 = _mm_extract_epi32(chx, 0);
-        chx1 = _mm_extract_epi32(chx, 1);
-        chx2 = _mm_extract_epi32(chx, 2);
-        chx3 = _mm_extract_epi32(chx, 3);
-        read_checksum += chx0 + chx1 + chx2 + chx3;
+        for (int blk = 0; blk < (sizeof(VEC_TYPE) / sizeof(__m128i)); blk++) {
+            __m128i chx = VEC_EXTRACT_128(sum, blk);
+            chx0 = _mm_extract_epi32(chx, 0);
+            chx1 = _mm_extract_epi32(chx, 1);
+            chx2 = _mm_extract_epi32(chx, 2);
+            chx3 = _mm_extract_epi32(chx, 3);
+            read_checksum += chx0 + chx1 + chx2 + chx3;
+        }
+        
         printf("checksum reached: %lu\n", read_checksum);
         int xyz;
         uint64_t wrchk = 0;
@@ -331,7 +336,7 @@ int main(int argc, char *argv[]) {
         pg_size = 2ULL*1024ULL*1024ULL;
     }
     setbuf(stdout, NULL);
-    int cores[32] = {1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51,53,55,57,59,61,63};
+    int cores[32] = {0,2,4,6,8,10,12,14,16,18,20,22,24,26};
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <num_threads> [manual] [fraction of hotset in local] [distribute/localize] [reset]\n", argv[0]);
         return 1;

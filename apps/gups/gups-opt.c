@@ -19,23 +19,37 @@
 #define LOG_INTERVAL_MS 1000
 #define MAX_THREADS 32
 
-#define LOCAL_NUMA 1
-#define REMOTE_NUMA 0
+#define LOCAL_NUMA 0
+#define REMOTE_NUMA 1
 
-// #define WSS 103079215104ULL
+#define PG_SIZE 4096ULL
+
 #define WSS 77309411328ULL
-//#define WSS 1073741824ULL
-//#define WSS 21474836480ULL
-// #define HOTSS 25769803776ULL
 #define HOTSS 21474836480ULL
-//#define HOTSS 1073741824ULL
-// #define WSS 2147483648ULL
-// #define HOTSS 1073741824ULL
-// #define CHUNK_SIZE 4096
-// #define CL_PER_CHUNK 64
+#define HOTSET_THRESHOLD 99 // Percentage of accesses to hotset
 
 // int TSC_ratio;
 // uint64_t begin_ts;
+
+#if defined(__AVX512F__)
+// --- AVX-512 backend ---
+#define VEC_TYPE       __m512i
+#define VEC_LOAD(p)    _mm512_load_si512((__m512i const*)(p))
+#define VEC_STORE(p,v) _mm512_store_si512((__m512i*)(p), (v))
+#define VEC_ADD(a,b)   _mm512_add_epi32((a),(b))
+#define VEC_SET1(x)    _mm512_set1_epi32(x)
+#define VEC_EXTRACT_128(v, idx) _mm512_extracti32x4_epi32((v), (idx))
+#else
+// --- AVX2 fallback ---
+#define VEC_TYPE       __m256i
+#define VEC_LOAD(p)    _mm256_load_si256((__m256i const*)(p))
+#define VEC_STORE(p,v) _mm256_store_si256((__m256i*)(p), (v))
+#define VEC_ADD(a,b)   _mm256_add_epi32((a),(b))
+#define VEC_SET1(x)    _mm256_set1_epi32(x)
+#define VEC_EXTRACT_128(v, idx) \
+    ((idx) == 0 ? _mm256_castsi256_si128(v) : _mm256_extracti128_si256(v, 1))
+
+#endif
 
 size_t pg_size;
 
@@ -68,16 +82,45 @@ typedef struct {
     int reset_mbind;
     size_t local_free;
     _Atomic int finish;
+    size_t num_threads;
 } ThreadArgs;
 
 #define MAP_HUGE_1GB (30 << MAP_HUGE_SHIFT)
 
 _Atomic int g_move_hotset;
+_Atomic int g_sync;
+
+void print_pages_nodes(void *addr, size_t length, char *label, int thread_id) {
+    size_t pages = length / PG_SIZE;
+
+    void **pages_addr = malloc(pages * sizeof(void *));
+    int *status = malloc(pages * sizeof(int));
+    size_t isOnNUMA0 = 0;
+    size_t isOnNUMA1 = 0;
+
+    for (size_t i = 0; i < pages; i++)
+        pages_addr[i] = (char *)addr + i * PG_SIZE;
+
+    if (move_pages(0, pages, pages_addr, NULL, status, 0) == -1) {
+        perror("move_pages");
+        exit(1);
+    }
+
+    for (size_t i = 0; i < pages; i++) {
+        if (status[i] == LOCAL_NUMA) isOnNUMA0++;
+        else if (status[i] == REMOTE_NUMA) isOnNUMA1++;
+    }
+
+    printf("%s/%d: Total pages: %zu, NUMA0: %zu, NUMA1: %zu\n", label, thread_id, pages, isOnNUMA0, isOnNUMA1);
+
+    free(pages_addr);
+    free(status);
+}
 
 void *thread_function(void *arg) {
     ThreadArgs *args = (ThreadArgs *)arg;
     // char *a = (char *)malloc(args->buf_size);
-    int mmap_flags =  MAP_PRIVATE |  MAP_ANONYMOUS;
+    int mmap_flags =  MAP_PRIVATE | MAP_ANONYMOUS;
     if(getenv("GUPS_HUGEPAGES") != NULL) {
         mmap_flags |= MAP_HUGETLB;
     }
@@ -85,7 +128,8 @@ void *thread_function(void *arg) {
         mmap_flags |= MAP_HUGETLB;
         mmap_flags |= MAP_HUGE_1GB;
     }
-    char *a = mmap(0, args->buf_size, PROT_READ | PROT_WRITE, mmap_flags, -1, 0);
+    char *a = mmap(0, args->hot_size, PROT_READ | PROT_WRITE, mmap_flags, -1, 0);
+    char *b = mmap(0, args->buf_size - args->hot_size, PROT_READ | PROT_WRITE, mmap_flags, -1, 0); 
     if(a == NULL) {
         printf("mmap failed\n");
         return NULL;
@@ -95,171 +139,79 @@ void *thread_function(void *arg) {
     cur_ts = rdtscp();
     prev_ts = cur_ts;
 
+
+    char *hot_start = a;
+    char *cold_start = b;
+    size_t hot_slots = args->hot_size / 64;
+    size_t cold_slots = (args->buf_size - args->hot_size) / 64;
+
     if(args->manual_placement) {
-        unsigned long local_nodemask = (1UL << LOCAL_NUMA);
-        unsigned long remote_nodemask = (1UL << REMOTE_NUMA);
 
-        // New manual placement mechanism
+        size_t hotset_in_local = args->local_hot_pages * PG_SIZE;
+        size_t hotset_in_remote = args->hot_size - hotset_in_local;
+        size_t coldset_in_local = args->local_free - hotset_in_local;
+        size_t coldset_in_remote = (args->buf_size - args->hot_size) - coldset_in_local;
 
-        // Set mbind policy for hot set
-        if(args->local_hot_pages > 0){
-            if(mbind(a + args->buf_size - args->hot_size, args->local_hot_pages*pg_size, MPOL_BIND, &local_nodemask, sizeof(local_nodemask)*8, MPOL_MF_STRICT) != 0) {
-                fprintf(stderr, "second mbind failed\n");
-                return NULL;
-            }
-        }
-        if(mbind(a + args->buf_size - args->hot_size + args->local_hot_pages*pg_size, args->hot_size - args->local_hot_pages*pg_size, MPOL_BIND, &remote_nodemask, sizeof(remote_nodemask)*8, MPOL_MF_STRICT) != 0) {
-            fprintf(stderr, "third mbind failed\n");
-            return NULL;
+        // Touch data in local NUMA node
+        for(size_t offset = 0; offset < hotset_in_local; offset += PG_SIZE) {
+            memset(&hot_start[offset], 1995, 64);
+            volatile char tmp = hot_start[offset];
         }
 
-        // Set mbind policy for cold set
-        size_t cold_in_local = args->local_free - args->hot_size;
-        if(cold_in_local > args->buf_size - args->hot_size) {
-            cold_in_local = args->buf_size - args->hot_size;
-        }
-        // printf("fourth mbind, cold_in_local: %lu\n", cold_in_local);
-        if(cold_in_local > 0 && mbind(a, cold_in_local, MPOL_BIND, &local_nodemask, sizeof(local_nodemask)*8, MPOL_MF_STRICT) != 0) {
-            fprintf(stderr, "fourth mbind failed\n");
-            return NULL;
-        }
-        if(cold_in_local < args->buf_size - args->hot_size && mbind(a + cold_in_local, args->buf_size - args->hot_size - cold_in_local, MPOL_BIND, &remote_nodemask, sizeof(remote_nodemask)*8, MPOL_MF_STRICT) != 0) {
-            fprintf(stderr, "fifth mbind failed\n");
-            return NULL;
+        for(size_t offset = 0; offset < coldset_in_local; offset += PG_SIZE) {
+            memset(&cold_start[offset], 1996, 64);
+            volatile char tmp = cold_start[offset];
         }
 
-        // Old manual placement mechanism
-        //if(mbind(a, args->buf_size - args->hot_size, MPOL_BIND, &remote_nodemask, sizeof(remote_nodemask)*8, MPOL_MF_STRICT) != 0) {
-        //     fprintf(stderr, "first mbind failed\n");
-        //     return NULL;
-        //}
-        // Setting mbind policy only for hot set. cold set will be allocated in remaining space
-        // if(args->local_hot_pages > 0){
-        //     if(mbind(a + args->buf_size - args->hot_size, args->local_hot_pages*pg_size, MPOL_BIND, &local_nodemask, sizeof(local_nodemask)*8, MPOL_MF_STRICT) != 0) {
-        //         fprintf(stderr, "second mbind failed\n");
-        //         return NULL;
-        //     }
-        // }
-        // if(mbind(a + args->buf_size - args->hot_size + args->local_hot_pages*pg_size, args->hot_size - args->local_hot_pages*pg_size, MPOL_BIND, &remote_nodemask, sizeof(remote_nodemask)*8, MPOL_MF_STRICT) != 0) {
-        //     fprintf(stderr, "third mbind failed\n");
-        //     return NULL;
-        // }
+        // Barrier to ensure all threads finish touching local data
+        atomic_fetch_add(&g_sync, 1);
+        while(atomic_load(&g_sync) < args->num_threads) {
+            // busy wait
+            sched_yield();
+        }
+
+        // Touch data in remote NUMA node
+        for(size_t offset = 0; offset < coldset_in_remote; offset += PG_SIZE) {
+            memset(&cold_start[coldset_in_local + offset], 1996, 64);
+            volatile char tmp = cold_start[coldset_in_local + offset];
+        }
+
+
+        for(size_t offset = 0; offset < hotset_in_remote; offset += PG_SIZE) {
+            memset(&hot_start[hotset_in_local + offset], 1995, 64);
+            volatile char tmp = hot_start[hotset_in_local + offset];
+        }
+
+        // Verify placement
+        print_pages_nodes(hot_start, hotset_in_local, "Hotset Local", args->thread_id);
+        print_pages_nodes(cold_start, coldset_in_local, "Coldset Local", args->thread_id);
+        print_pages_nodes(hot_start + hotset_in_local, hotset_in_remote, "Hotset Remote", args->thread_id);
+        print_pages_nodes(cold_start + coldset_in_local, coldset_in_remote, "Coldset Remote", args->thread_id);
     }
-    
-    // printf("allocated %lu buf\n", args->buf_size);
-    // memset(a, 'm', args->buf_size);
-    // Fill buffer in reverse order, so that hot set pages fault and are allocated first (so that mbind policy can be satisfied)
-    // Remaining memory will be used to opportunistically allocate cold set pages
-    if(args->manual_placement) {
-        // for(char *p = a + args->buf_size-1; p >= a; p--) {
-            // *p = 'm';
-            // asm volatile("" : : : "memory");
-        // }
-        memset(a, 'm', args->buf_size);
-    } else {
-        memset(a, 'm', args->buf_size);
-    }
-
-    asm volatile("" : : : "memory");
-    
-    if(args->manual_placement && args->reset_mbind) {
-        // reset mbind policy to default
-        if(mbind(a, args->buf_size, MPOL_DEFAULT, NULL, 0, 0) != 0) {
-                fprintf(stderr, "reset mbind failed\n");
-                return NULL;
-        }
-        fprintf(stderr, "resent mbind\n");
-    }
-
-    asm volatile("" : : : "memory");
-    
-
-    // Prevent compiler reordering
-    
-
-    // Perform manual placement if needed
-    // if(args->manual_placement) {
-    //     size_t pg_count = (args->buf_size)/4096ULL;
-    //     size_t hot_pg_count = (args->hot_size)/4096ULL;
-    //     void **page_ptrs = (void **)malloc(pg_count*sizeof(void *));
-    //     int *target_nodes = (int *)malloc(pg_count*sizeof(int));
-    //     int *move_status = (int *)malloc(pg_count*sizeof(int));
-    //     if(!page_ptrs || !target_nodes || !move_status) {
-    //         fprintf(stderr, "malloc failed in manual memory placement\n");
-    //         return NULL;
-    //     }
-    //     for(int pg_idx = 0; pg_idx < pg_count; pg_idx++) {
-    //         page_ptrs[pg_idx] = a + pg_idx*4096;
-    //         move_status[pg_idx] = 1024;
-    //     }
-    //     // Get current locations of pages
-    //     if(move_pages(0, pg_count, page_ptrs, NULL, move_status, 0) != 0) {
-    //         fprintf(stderr, "move_pages to remote failed\n");
-    //         return NULL;
-    //     }
-    //     size_t status_local = 0, status_remote = 0, status_fault = 0;
-    //     for(int pg_idx = 0; pg_idx < pg_count; pg_idx++) {
-    //         if(move_status[pg_idx] == LOCAL_NUMA) status_local += 1;
-    //         else if (move_status[pg_idx] == REMOTE_NUMA) status_remote += 1;
-    //         else if (move_status[pg_idx] == -14) status_fault += 1;
-    //         else {
-    //             printf("Different status: %d\n", move_status[pg_idx]);
-    //         }
-    //     }
-    //     printf("status local: %lu, status remote: %lu, status_fault: %lu\n", status_local, status_remote, status_fault);
-    //     // All pages in remote except required number of hot pages in local
-    //     size_t local_pg_count = 0;
-    //     for(int pg_idx = 0; pg_idx < pg_count; pg_idx++) {
-    //         int in_local = (pg_idx >= pg_count - hot_pg_count && pg_idx < pg_count - hot_pg_count + args->local_hot_pages);
-    //         target_nodes[pg_idx] = (in_local)?(LOCAL_NUMA):(REMOTE_NUMA);
-    //         if(in_local) local_pg_count += 1;
-    //     }
-    //     printf("local_pg_count: %lu\n", local_pg_count);
-    //     if(move_pages(0, pg_count, page_ptrs, target_nodes, move_status, MPOL_MF_MOVE) != 0) {
-    //         fprintf(stderr, "move_pages to remote failed\n");
-    //         return NULL;
-    //     }
-    //     status_local = 0; status_remote = 0; status_fault = 0;
-    //     for(int pg_idx = 0; pg_idx < pg_count; pg_idx++) {
-    //         if(move_status[pg_idx] == LOCAL_NUMA) status_local += 1;
-    //         else if (move_status[pg_idx] == REMOTE_NUMA) status_remote += 1;
-    //         else if (move_status[pg_idx] == -14) status_fault += 1;
-    //         else {
-    //             printf("Different status: %d\n", move_status[pg_idx]);
-    //         }
-    //     }
-    //     printf("status local: %lu, status remote: %lu, status_fault: %lu\n", status_local, status_remote, status_fault);
-    //     free(page_ptrs);
-    //     free(target_nodes);
-    //     free(move_status);
-    // }
-
+        
     uint64_t x = 432437644 + args->thread_id;
     uint64_t count = 0, prev_count = 0;
-    __m512i sum = _mm512_set_epi32(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    __m512i val = _mm512_set_epi32(1995, 1995, 2002, 2002, 1995, 1995, 2002, 2002, 1995, 1995, 2002, 2002, 1995, 1995, 2002, 2002);
+    VEC_TYPE sum = VEC_SET1(0);
+    VEC_TYPE val = VEC_SET1(1995);
     int i;
-    char *hot_start = a + (args->buf_size - args->hot_size);
-    // char *cold_start = a;
-    size_t hot_slots = args->hot_size / 64;
-    size_t cold_slots = (args->buf_size)/64;
     char *start;
     size_t slots;
     char *chunk;
+
     while(count < 999999999999999ULL) {
         #if defined(WORKLOAD_READWRITE)
         for(i = 0; i < 131072; i++) {
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
-            start = (x%100 < 90)?(hot_start):(a);
-            slots = (x%100 < 90)?(hot_slots):(cold_slots);
+            start = (x%100 < HOTSET_THRESHOLD)?(hot_start):(cold_start);
+            slots = (x%100 < HOTSET_THRESHOLD)?(hot_slots):(cold_slots);
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
             chunk = start + 64*(x%slots);
-            __m512i mm_a = _mm512_load_si512(chunk);
-            _mm512_store_si512(chunk, _mm512_add_epi32(mm_a, val));
+            VEC_TYPE mm_a = VEC_LOAD(chunk);
+            VEC_STORE(chunk, VEC_ADD(mm_a, val));
             count++;
         }
         #elif defined(WORKLOAD_READ)
@@ -267,14 +219,14 @@ void *thread_function(void *arg) {
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
-            start = (x%100 < 90)?(hot_start):(a);
-            slots = (x%100 < 90)?(hot_slots):(cold_slots);
+            start = (x%100 < HOTSET_THRESHOLD)?(hot_start):(cold_start);
+            slots = (x%100 < HOTSET_THRESHOLD)?(hot_slots):(cold_slots);
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
             chunk = start + 64*(x%slots);
-            __m512i mm_a = _mm512_load_si512(chunk);
-            sum = _mm512_add_epi32(sum, mm_a);
+            VEC_TYPE mm_a = VEC_LOAD(chunk);
+            sum = VEC_ADD(sum, mm_a);
             count++;
         }
         #elif defined(WORKLOAD_2TO1)
@@ -282,26 +234,26 @@ void *thread_function(void *arg) {
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
-            start = (x%100 < 90)?(hot_start):(a);
-            slots = (x%100 < 90)?(hot_slots):(cold_slots);
+            start = (x%100 < HOTSET_THRESHOLD)?(hot_start):(cold_start);
+            slots = (x%100 < HOTSET_THRESHOLD)?(hot_slots):(cold_slots);
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
             chunk = start + 64*(x%slots);
-            __m512i mm_a = _mm512_load_si512(chunk);
-            sum = _mm512_add_epi32(sum, mm_a);
+            VEC_TYPE mm_a = VEC_LOAD(chunk);
+            sum = VEC_ADD(sum, mm_a);
             count++;
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
-            start = (x%100 < 90)?(hot_start):(a);
-            slots = (x%100 < 90)?(hot_slots):(cold_slots);
+            start = (x%100 < HOTSET_THRESHOLD)?(hot_start):(cold_start);
+            slots = (x%100 < HOTSET_THRESHOLD)?(hot_slots):(cold_slots);
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
             chunk = start + 64*(x%slots);
-            mm_a = _mm512_load_si512(chunk);
-            _mm512_store_si512(chunk, _mm512_add_epi32(mm_a, val));
+            mm_a = VEC_LOAD(chunk);
+            VEC_STORE(chunk, VEC_ADD(mm_a, val));
             count++;
         }
         #elif defined(WORKLOAD_3TO1)
@@ -309,38 +261,38 @@ void *thread_function(void *arg) {
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
-            start = (x%100 < 90)?(hot_start):(a);
-            slots = (x%100 < 90)?(hot_slots):(cold_slots);
+            start = (x%100 < HOTSET_THRESHOLD)?(hot_start):(cold_start);
+            slots = (x%100 < HOTSET_THRESHOLD)?(hot_slots):(cold_slots);
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
             chunk = start + 64*(x%slots);
-            __m512i mm_a = _mm512_load_si512(chunk);
-            sum = _mm512_add_epi32(sum, mm_a);
+            VEC_TYPE mm_a = VEC_LOAD(chunk);
+            sum = VEC_ADD(sum, mm_a);
             count++;
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
-            start = (x%100 < 90)?(hot_start):(a);
-            slots = (x%100 < 90)?(hot_slots):(cold_slots);
+            start = (x%100 < HOTSET_THRESHOLD)?(hot_start):(cold_start);
+            slots = (x%100 < HOTSET_THRESHOLD)?(hot_slots):(cold_slots);
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
             chunk = start + 64*(x%slots);
-            mm_a = _mm512_load_si512(chunk);
-            sum = _mm512_add_epi32(sum, mm_a);
+            mm_a = VEC_LOAD(chunk);
+            sum = VEC_ADD(sum, mm_a);
             count++;
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
-            start = (x%100 < 90)?(hot_start):(a);
-            slots = (x%100 < 90)?(hot_slots):(cold_slots);
+            start = (x%100 < HOTSET_THRESHOLD)?(hot_start):(cold_start);
+            slots = (x%100 < HOTSET_THRESHOLD)?(hot_slots):(cold_slots);
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
             chunk = start + 64*(x%slots);
-            mm_a = _mm512_load_si512(chunk);
-            _mm512_store_si512(chunk, _mm512_add_epi32(mm_a, val));
+            mm_a = VEC_LOAD(chunk);
+            VEC_STORE(chunk, VEC_ADD(mm_a, val));
             count++;
         }
         #endif
@@ -350,76 +302,82 @@ void *thread_function(void *arg) {
         if(atomic_load(&(g_move_hotset))) {
             hot_start = a;
         }
+
         if(atomic_load(&(args->finish))) {
-            if(munmap(a, args->buf_size) != 0) {
+
+            // Check if Placement has changed
+            if(args->manual_placement) {
+                size_t hotset_in_local = args->local_hot_pages * PG_SIZE;
+                size_t hotset_in_remote = args->hot_size - hotset_in_local;
+                size_t coldset_in_local = args->local_free - hotset_in_local;
+                size_t coldset_in_remote = (args->buf_size - args->hot_size) - coldset_in_local;
+
+                print_pages_nodes(hot_start, hotset_in_local, "Hotset Local", args->thread_id);
+                print_pages_nodes(cold_start, coldset_in_local, "Coldset Local", args->thread_id);
+                print_pages_nodes(hot_start + hotset_in_local, hotset_in_remote, "Hotset Remote", args->thread_id);
+                print_pages_nodes(cold_start + coldset_in_local, coldset_in_remote, "Coldset Remote", args->thread_id);
+            }
+        
+            if(munmap(a, args->hot_size) != 0) {
                 printf("munmap failed\n");
             }
+
+            if(munmap(b, args->buf_size - args->hot_size) != 0) {
+                printf("munmap failed\n");
+            }
+
 		    return NULL;
         }
-        // cur_ts = rdtscp();
-        // printf("cur_ts: %lu, prev_ts: %lu\n", cur_ts, prev_ts);
-        // if(cur_ts - prev_ts >= LOG_INTERVAL_MS*TSC_ratio*100*1e3) {
-        //     printf("%lu %lu\n", cur_ts-begin_ts, count - prev_count);
-        //     prev_ts = cur_ts;
-        //     prev_count = count;
-        // }
-        // if(__builtin_expect(count % 1000 == 0, 0)) {
-        //     cur_ts = rdtscp();
-        //     if(__builtin_expect(cur_ts - prev_ts >= LOG_INTERVAL_MS*TSC_ratio*100*1e3, 0)) {
-        //         printf("%lu %lu\n", cur_ts-begin_ts, count - prev_count);
-        //         prev_ts = cur_ts;
-        //         prev_count = count;
-        //     }
-        // }
+
     }
 
 
-        uint64_t read_checksum;
-        int chx0, chx1, chx2, chx3;
-        __m128i chx;
-        chx = _mm512_extracti32x4_epi32(sum, 0);
-        chx0 = _mm_extract_epi32(chx, 0);
-        chx1 = _mm_extract_epi32(chx, 1);
-        chx2 = _mm_extract_epi32(chx, 2);
-        chx3 = _mm_extract_epi32(chx, 3);
-        read_checksum += chx0 + chx1 + chx2 + chx3;
-        chx = _mm512_extracti32x4_epi32(sum, 1);
-        chx0 = _mm_extract_epi32(chx, 0);
-        chx1 = _mm_extract_epi32(chx, 1);
-        chx2 = _mm_extract_epi32(chx, 2);
-        chx3 = _mm_extract_epi32(chx, 3);
-        read_checksum += chx0 + chx1 + chx2 + chx3;
-        chx = _mm512_extracti32x4_epi32(sum, 2);
-        chx0 = _mm_extract_epi32(chx, 0);
-        chx1 = _mm_extract_epi32(chx, 1);
-        chx2 = _mm_extract_epi32(chx, 2);
-        chx3 = _mm_extract_epi32(chx, 3);
-        read_checksum += chx0 + chx1 + chx2 + chx3;
-        chx = _mm512_extracti32x4_epi32(sum, 3);
-        chx0 = _mm_extract_epi32(chx, 0);
-        chx1 = _mm_extract_epi32(chx, 1);
-        chx2 = _mm_extract_epi32(chx, 2);
-        chx3 = _mm_extract_epi32(chx, 3);
-        read_checksum += chx0 + chx1 + chx2 + chx3;
-        printf("checksum reached: %lu\n", read_checksum);
-        int xyz;
-        uint64_t wrchk = 0;
-        for(xyz = 0; xyz < args->buf_size; xyz++) {
-            wrchk += (int)(a[xyz]);
-        }
-        printf("wrchk: %lu\n", wrchk);
+    uint64_t read_checksum;
+    int chx0, chx1, chx2, chx3;
+    __m128i chx;
+    chx = VEC_EXTRACT_128(sum, 0);
+    chx0 = _mm_extract_epi32(chx, 0);
+    chx1 = _mm_extract_epi32(chx, 1);
+    chx2 = _mm_extract_epi32(chx, 2);
+    chx3 = _mm_extract_epi32(chx, 3);
+    read_checksum += chx0 + chx1 + chx2 + chx3;
+    chx = VEC_EXTRACT_128(sum, 1);
+    chx0 = _mm_extract_epi32(chx, 0);
+    chx1 = _mm_extract_epi32(chx, 1);
+    chx2 = _mm_extract_epi32(chx, 2);
+    chx3 = _mm_extract_epi32(chx, 3);
+    read_checksum += chx0 + chx1 + chx2 + chx3;
+    chx = VEC_EXTRACT_128(sum, 2);
+    chx0 = _mm_extract_epi32(chx, 0);
+    chx1 = _mm_extract_epi32(chx, 1);
+    chx2 = _mm_extract_epi32(chx, 2);
+    chx3 = _mm_extract_epi32(chx, 3);
+    read_checksum += chx0 + chx1 + chx2 + chx3;
+    chx = VEC_EXTRACT_128(sum, 3);
+    chx0 = _mm_extract_epi32(chx, 0);
+    chx1 = _mm_extract_epi32(chx, 1);
+    chx2 = _mm_extract_epi32(chx, 2);
+    chx3 = _mm_extract_epi32(chx, 3);
+    read_checksum += chx0 + chx1 + chx2 + chx3;
+    printf("checksum reached: %lu\n", read_checksum);
+
+    int xyz;
+    uint64_t wrchk = 0;
+    for(xyz = 0; xyz < args->buf_size; xyz++) {
+        wrchk += (int)(a[xyz]);
+    }
+    printf("wrchk: %lu\n", wrchk);
     
     return NULL;
 }
 
 int main(int argc, char *argv[]) {
-    //pg_size = 4096ULL;
-    pg_size = 2ULL*1024ULL*1024ULL;
+    pg_size = 4096ULL;
     if(getenv("GUPS_HUGEPAGES") != NULL) {
         pg_size = 2ULL*1024ULL*1024ULL;
     }
     setbuf(stdout, NULL);
-    int cores[32] = {1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51,53,55,57,59,61,63};
+    int cores[32] = {0,2,4,6,8,10,12,14,16,18,20,22,24,26};
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <num_threads> [manual] [fraction of hotset in local] [distribute/localize] [reset]\n", argv[0]);
         return 1;
@@ -476,6 +434,7 @@ int main(int argc, char *argv[]) {
         move_time = atoi(argv[3]);
     }
     atomic_init(&g_move_hotset, 0);
+    atomic_init(&g_sync, 0);
 
     // Get TSC frequency
     // int msr_fd;
@@ -522,6 +481,7 @@ int main(int argc, char *argv[]) {
         thread_args[i].reset_mbind = reset_mbind;
         thread_args[i].local_free = ((local_free/pg_size)/((size_t)num_threads))*pg_size;
         atomic_init(&(thread_args[i].finish), 0);
+        thread_args[i].num_threads = num_threads;
         
         CPU_ZERO(&cpuset);
         CPU_SET(cores[i], &cpuset);
@@ -543,6 +503,7 @@ int main(int argc, char *argv[]) {
     if(getenv("GUPS_DURATION") != NULL) {
         max_duration = atoi(getenv("GUPS_DURATION"));
     }
+
     while(elapsed < max_duration) {
         sleep(1);
         uint64_t cur_op_count = 0;
